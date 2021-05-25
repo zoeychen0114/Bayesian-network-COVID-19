@@ -1,0 +1,384 @@
+---
+title: "BN_05_14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+read CMU data
+```{r}
+library(dplyr)
+library(bnlearn)
+library(data.table)
+library(Rgraphviz)
+library(graph)
+library(dbnR)
+library(bnviewer)
+data <- read.csv("combined_final.csv",header = T)
+names(data) = c("date", "state", "new cases", "new deaths", "household covid like illness", "covid like illness in community", "household fever", "household sore throat", "household cough", "household shortness of breath", "self fever", "self sore throat", "self anosmia",  "contacted covid positive")
+```
+
+define functions
+```{r}
+time_renamet0 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_0")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_0"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec <- function(dt){
+    dt <- dt[1:(nrow(dt)-13),]
+    
+    dt <- time_renamet0(dt)
+  
+    #dt <- dt[1:(nrow(dt)-6),]
+  return (dt)
+}
+
+
+time_renamet1 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_1")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_1"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec1 <- function(dt){
+    dt <- dt[14:nrow(dt),]
+    
+    dt <- time_renamet1(dt)
+    #dt <- dt[7:nrow(dt),]
+
+  return (dt)
+}
+
+bl = read.csv("bl.csv", header = TRUE)
+names(bl) = c("from", "to")
+```
+
+function to get str phase i
+```{r}
+str_bn_phasei = function(GA){
+GA = data[data$state==GA,]
+GA$date = as.Date(GA$date)
+GA = GA[order(GA$date),]
+#hist(CA$`household covid like illness`)
+GA = GA[GA$date >="2020-4-01"&GA$date <="2020-5-15",]
+GA = subset(GA, select = -c(1:2))
+dt0 = fold_dt_rec(GA)
+dt1 = fold_dt_rec1(GA)
+dt_com = cbind(dt0, dt1)
+str_GA_I = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl))
+#str_GA_I_dag = averaged.network(str_GA_I, threshold = 0.85)
+}
+```
+
+function to get str phase ii
+```{r}
+str_bn_phaseii = function(GA){
+GA = data[data$state==GA,]
+GA$date = as.Date(GA$date)
+GA = GA[order(GA$date),]
+#hist(CA$`household covid like illness`)
+GA = GA[GA$date >="2020-5-16"&GA$date <="2020-10-15",]
+GA = subset(GA, select = -c(1:2))
+dt0 = fold_dt_rec(GA)
+dt1 = fold_dt_rec1(GA)
+dt_com = cbind(dt0, dt1)
+str_GA_I = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl))
+#str_GA_I_dag = averaged.network(str_GA_I, threshold = 0.85)
+}
+```
+
+function to get str phase iii
+```{r}
+str_bn_phaseiii = function(GA){
+GA = data[data$state==GA,]
+GA$date = as.Date(GA$date)
+GA = GA[order(GA$date),]
+#hist(CA$`household covid like illness`)
+GA = GA[GA$date >="2020-10-16",]
+GA = subset(GA, select = -c(1:2))
+dt0 = fold_dt_rec(GA)
+dt1 = fold_dt_rec1(GA)
+dt_com = cbind(dt0, dt1)
+str_GA_I = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl))
+#str_GA_I_dag = averaged.network(str_GA_I, threshold = 0.85)
+}
+```
+
+MT Phase II 5/16-10/15
+```{r}
+str_MT_II = str_bn_phaseii("MT")
+MT_II_dag = averaged.network(str_MT_II, threshold = 0.75)
+
+class(MT_II_dag) <- c("dbn", class(MT_II_dag))
+plot_dynamic_network(MT_II_dag)
+bayesianNetwork.boot.strength = str_MT_II
+
+avg.bayesianNetwork = MT_II_dag
+strength.viewer(
+	MT_II_dag,
+	bayesianNetwork.boot.strength,
+	bayesianNetwork.background = "#eff3ff",
+	bayesianNetwork.arc.strength.threshold.expression = c("@threshold > 0.85 & @threshold <= 1"),
+
+	bayesianNetwork.arc.strength.threshold.expression.color  = c("#08519c"),
+	bayesianNetwork.arc.strength.threshold.alternative.color =  "#08519c",
+	
+	bayesianNetwork.arc.strength.label = TRUE,
+	bayesianNetwork.arc.strength.label.prefix = "",
+	bayesianNetwork.arc.strength.label.color = "#08519c",
+	
+	bayesianNetwork.arc.strength.tooltip = TRUE,
+	
+	bayesianNetwork.edge.scale.min = 1,
+	bayesianNetwork.edge.scale.max = 5,
+	
+	bayesianNetwork.edge.scale.label.min = 14,
+	bayesianNetwork.edge.scale.label.max = 14,
+	
+	bayesianNetwork.width = "100%",
+	bayesianNetwork.height = "800px",
+	bayesianNetwork.layout = "layout_on_grid",
+	node.colors = list(background = "#67a9cf",
+						border = "#1c9099", 
+						highlight = list(background = "#3182bd",
+										border = "#08519c")),
+	node.font = list(color = "black", face="Arial", size=30),
+	node.shape = c("dot"),
+	edges.dashes = FALSE,
+	options.highlightNearest = TRUE,
+	edges.smooth = TRUE,
+	bayesianNetwork.title="MT Phase II",
+)
+```
+
+
+GA Phase I 4/1-5/15
+```{r}
+str_GA_I = str_bn_phasei("GA")
+```
+
+GA Phase II 5/16-10/15
+```{r}
+str_GA_II = str_bn_phaseii("GA")
+```
+
+GA Phase III after 10/16 
+```{r}
+str_GA_III = str_bn_phaseiii("GA")
+```
+
+GA convert to ones
+```{r}
+str_GA_I_ones = convert_to_ones(str_GA_I)
+str_GA_II_ones = convert_to_ones(str_GA_II)
+str_GA_III_ones = convert_to_ones(str_GA_III)
+GAII_GAIII = pair_comparison(str_GA_II_ones, str_GA_III_ones, "GAI", "GAII")
+CA_GA = pair_comparison(str_CA_III_ones, str_GA_III_ones, "CA", "GA")
+```
+
+OR 
+```{r}
+str_OR_I = str_bn("OR")
+str_OR_II = str_bn_phaseii("OR")
+str_OR_III = str_bn_phaseiii("OR")
+str_OR_I_ones = convert_to_ones(str_OR_I)
+str_OR_II_ones = convert_to_ones(str_OR_II)
+str_OR_III_ones = convert_to_ones(str_OR_III)
+CA_OR = pair_comparison(str_CA_II_ones, str_OR_II_ones, "CA", "OR")
+CA_OR = pair_comparison(str_CA_III_ones, str_OR_III_ones, "CA", "OR")
+```
+
+dag comparison for 5 states
+```{r}
+compare(str_CA_I_dag, str_TX_I_dag)
+compare(str_CA_II_dag, str_FL_II_dag)
+compare(str_CA_III_dag, str_FL_III_dag)
+compare(str_FL_I_dag, str_TX_I_dag, arcs = TRUE)
+compare(str_FL_II_dag, str_TX_II_dag, arcs = TRUE)
+compare(str_FL_III_dag, str_TX_III_dag, arcs = TRUE)
+```
+
+pair_comparison
+```{r}
+pair_comparison = function(df1, df2, state1, state2){
+pair <- merge(df1,df2,by=c("from","to"))
+names(pair) = c("from","to",state1,state2)
+pair$sum_ones = pair[,3]+pair[,4]
+pair = pair[grep("_t_0", pair$from),]
+pair = pair[grep("_t_1", pair$to),]
+pair = pair[order(-pair$sum_ones),]
+sum(pair$sum_ones==2)
+}
+```
+
+phase ii acrs and strength combine to compare NY and NJ
+```{r}
+NY_NJ = pair_comparison(str_NY_II_ones, str_NJ_II_ones, "NY", "NJ")
+CA_NY = pair_comparison(str_CA_II_ones, str_NY_II_ones, "CA", "NY")
+CA_FL = pair_comparison(str_CA_II_ones, str_FL_II_ones, "CA", "FL")
+NY_FL = pair_comparison(str_NY_II_ones, str_FL_II_ones, "NY", "FL")
+CA_NY = pair_comparison(str_CA_II_ones, str_NY_II_ones, "CA", "NY")
+```
+
+
+conver to ones function
+```{r}
+convert_to_ones <- function(df) {
+  str_ones = df %>%   mutate(ones=ifelse(strength>=0.75&direction==1,1,0))
+  str_ones = subset(str_ones, select=-c(3,4))}
+```
+
+run for all states
+```{r}
+totalI = str_CA_I_ones
+totalII = str_CA_II_ones
+totalIII = str_CA_III_ones
+all_states = unique(data$state)
+for (state in all_states){
+  str_I = str_bn_phasei(state)
+  str_II = str_bn_phaseii(state)
+  str_III = str_bn_phaseiii(state)
+  str_I_ones = convert_to_ones(str_I)
+  str_II_ones = convert_to_ones(str_II)
+  str_III_ones = convert_to_ones(str_III)
+  totalI <- merge(totalI, str_I_ones,by=c("from","to"))
+  totalII <- merge(totalII, str_II_ones,by=c("from","to"))
+  totalIII <- merge(totalIII, str_III_ones,by=c("from","to"))
+}
+totalI = subset(totalI, select =-c(3))
+totalII = subset(totalII, select =-c(3))
+totalIII = subset(totalIII, select =-c(3))
+```
+
+
+5 States combine to compare
+```{r}
+str_CA_I_ones = convert_to_ones(str_CA_I)
+str_CA_III_ones = convert_to_ones(str_CA_III)
+str_NY_III_ones = convert_to_ones(str_NY_III)
+str_NJ_III_ones = convert_to_ones(str_NJ_III)
+str_FL_III_ones = convert_to_ones(str_FL_III)
+str_TX_III_ones = convert_to_ones(str_TX_III)
+str_CA_II_ones = convert_to_ones(str_CA_II)
+#str_NY_II_ones = convert_to_ones(str_NY_II)
+#str_NJ_II_ones = convert_to_ones(str_NJ_II)
+str_FL_II_ones = convert_to_ones(str_FL_II)
+str_TX_II_ones = convert_to_ones(str_TX_II)
+totalIII <- merge(str_CA_III_ones,str_NY_III_ones,by=c("from","to"))
+totalIII <- merge(totalIII,str_NJ_III_ones,by=c("from","to"))
+totalIII <- merge(totalIII,str_FL_III_ones,by=c("from","to"))
+totalIII <- merge(totalIII,str_TX_III_ones,by=c("from","to"))
+names(totalIII) = c("from","to","CA","NY","NJ","FL","TX")
+totalIII = totalIII %>% mutate(sum_ones=CA+NY+NJ+FL+TX)
+totalIII = totalIII[grep("_t_0", totalIII$from),]
+totalIII = totalIII[grep("_t_1", totalIII$to),]
+totalIII = totalIII[order(-totalIII$sum_ones),]
+
+total3states <- merge(str_CA_II_ones,str_FL_II_ones,by=c("from","to"))
+total3states <- merge(total3states,str_TX_II_ones,by=c("from","to"))
+totalII <- merge(totalII,str_FL_II_ones,by=c("from","to"))
+totalII <- merge(totalII,str_TX_II_ones,by=c("from","to"))
+#totalII <- merge(totalII,str_GA_II_ones,by=c("from","to"))
+names(total3states) = c("from","to","CA","FL","TX")
+total3states = total3states %>% mutate(sum_ones=CA+FL+TX)
+total3states = total3states [grep("_t_0", totalII$from),]
+total3states = total3states [grep("_t_1", totalII$to),]
+total3states = total3states [order(-total3states$sum_ones),]
+total3states = total3states [total3states$sum_ones>=2,]
+
+```
+
+sum ones by arcs
+```{r}
+totalI$sum_ones <- rowSums(totalI[,3:53])
+totalI = totalI[order(-totalI$sum_ones),]
+totalII$sum_ones <- rowSums(totalII[,3:53])
+totalII = totalII[order(-totalII$sum_ones),]
+totalIII$sum_ones <- rowSums(totalIII[,3:53])
+totalIII = totalIII[order(-totalIII$sum_ones),]
+SUM_I = subset(totalI, select=c(1,2,54))
+SUM_II = subset(totalII, select=c(1,2,54))
+SUM_III = subset(totalIII, select=c(1,2,54))
+SUM_III[SUM_III$from=='new cases_t_0',]
+SUM_II[SUM_II$from=='new cases_t_0',]
+SUM_I[SUM_I$from=='new cases_t_0',]
+SUM_III[SUM_III$to=='new cases_t_1',]
+SUM_I[SUM_I$to=='new cases_t_1',]
+SUM_II[SUM_II$to=='new cases_t_1',]
+```
+
+
+phase ii acrs and strength comparison by matrix for 5 states
+```{r}
+library(dils)
+library(igraph)
+edgelist <- str_FL_III[,1:3]
+CA_II_MATRIX = AdjacencyFromEdgelist(str_CA_II[,1:3])
+NY_II_MATRIX = AdjacencyFromEdgelist(str_NY_II[,1:3])
+NJ_II_MATRIX = AdjacencyFromEdgelist(str_NJ_II[,1:3])
+FL_II_MATRIX = AdjacencyFromEdgelist(str_FL_II[,1:3])
+TX_II_MATRIX = AdjacencyFromEdgelist(str_TX_II[,1:3])
+Batch1_states = CA_II_MATRIX$adjacency + NY_II_MATRIX$adjacency + NJ_II_MATRIX$adjacency + FL_II_MATRIX$adjacency + TX_II_MATRIX$adjacency
+batch1_matrix = TX_II_MATRIX
+batch1_matrix$adjacency = Batch1_states
+col_names = vapply(batch1_matrix$nodelist, paste, collapse = ", ", character(1L))
+rownames(Batch1_states) = col_names
+colnames(Batch1_states) = col_names
+batch1_edgelist = melt(Batch1_states)
+similar_acrs = batch1_edgelist[batch1_edgelist$value>0.1,]
+similar_acrs = similar_acrs[grep("_t_0", similar_acrs$Var1),]
+similar_acrs = similar_acrs[order(-similar_acrs$value),]
+rownames(similar_acrs) <- NULL
+```
+
+phase iii acrs and strength comparison by matrix for 5 states
+```{r}
+library(dils)
+library(igraph)
+CA_III_MATRIX = AdjacencyFromEdgelist(str_CA_III[,1:3])
+NY_III_MATRIX = AdjacencyFromEdgelist(str_NY_III[,1:3])
+NJ_III_MATRIX = AdjacencyFromEdgelist(str_NJ_III[,1:3])
+FL_III_MATRIX = AdjacencyFromEdgelist(str_FL_III[,1:3])
+TX_III_MATRIX = AdjacencyFromEdgelist(str_TX_III[,1:3])
+Batch2_states = CA_III_MATRIX$adjacency + NY_III_MATRIX$adjacency + NJ_III_MATRIX$adjacency + FL_III_MATRIX$adjacency + TX_III_MATRIX$adjacency
+batch2_matrix = TX_III_MATRIX
+batch2_matrix$adjacency = Batch2_states
+col_names = vapply(batch2_matrix$nodelist, paste, collapse = ", ", character(1L))
+rownames(Batch2_states) = col_names
+colnames(Batch2_states) = col_names
+batch2_edgelist = melt(Batch2_states)
+similar_acrs = batch1_edgelist[batch2_edgelist$value>0.1,]
+similar_acrs = similar_acrs[grep("_t_0", similar_acrs$Var1),]
+similar_acrs = similar_acrs[order(-similar_acrs$value),]
+rownames(similar_acrs) <- NULL
+```
+
