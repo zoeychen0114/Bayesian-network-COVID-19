@@ -1,0 +1,465 @@
+---
+title: "BN_04_04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+read data
+```{r}
+library(dplyr)
+library(bnlearn)
+library(data.table)
+library(Rgraphviz)
+library(graph)
+library(dbnR)
+data <- read.csv("combined_final.csv",header = T)
+names(data) = c("date", "state", "new cases", "new deaths", "household covid like illness", "covid like illness in community", "household fever", "household sore throat", "household cough", "household shortness of breath", "self fever", "self sore throat", "self anosmia",  "contacted covid positive")
+```
+
+define functions
+```{r}
+time_renamet0 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_0")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_0"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec <- function(dt){
+    dt <- dt[1:nrow(dt)-1,]
+    
+    dt <- time_renamet0(dt)
+  
+    #dt <- dt[1:(nrow(dt)-6),]
+  return (dt)
+}
+dt0 = fold_dt_rec(NY)
+
+time_renamet1 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_1")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_1"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec1 <- function(dt){
+    dt <- dt[2:nrow(dt),]
+    
+    dt <- time_renamet1(dt)
+    #dt <- dt[7:nrow(dt),]
+
+  return (dt)
+}
+dt0 = fold_dt_rec(NY)
+dt1 = fold_dt_rec1(NY)
+
+dt_com = cbind(dt0, dt1)
+
+#bl1 = tiers2blacklist(list("new cases_t_0", "new deaths_t_0","household covid like illness_t_0", "covid like illness in community_t_0", "household fever_t_0", "household sore throat_t_0", "household cough_t_0", "household shortness of breath_t_0", "self fever_t_0", "self sore throat_t_0", "self anosmia_t_0",  "contacted covid positive_t_0", c("new cases_t_1", "new deaths_t_1","household covid like illness_t_1", "covid like illness in community_t_1", "household fever_t_1", "household sore throat_t_1", "household cough_t_1", "household shortness of breath_t_1", "self fever_t_1", "self sore throat_t_1", "self anosmia_t_1",  "contacted covid positive_t_1")))
+bl = read.csv("bl.csv", header = TRUE)
+names(bl) = c("from", "to")
+```
+
+
+plot dynamic BN function
+```{r}
+plot_dynamic_network <- function(structure, offset = 200){
+  check_opt_pkgs_available()
+  initial_dbn_check(structure)
+  numeric_arg_check(offset)
+
+  # Static net positioning
+  nodes_uniq <- dynamic_ordering(structure)
+  levels <- node_levels(structure, nodes_uniq)
+  if(sum(as.numeric(levels[2,])) == dim(levels)[2]) # Fix for nets with no inter-slice arcs (PSOHO) and all nodes in a horizontal line
+    levels[2,] <- 1:dim(levels)[2]
+  positions <- acc_successions(as.numeric(levels[2,]))
+  n_nodes_slice <- length(nodes_uniq)
+
+  max_consec <- max(positions)
+  ord <- bnlearn::nnodes(structure) / n_nodes_slice
+
+  # Relative position of the nodes
+  nodes_uniq <- expand_time_nodes(nodes_uniq, nodes_uniq, ord, 1)
+  
+  all_pos <- Reduce(function(acu, x){
+    c(acu, (positions * 100 + x * 100 * max_consec + x * offset))}, 
+    0:(ord-1), NULL)
+  
+  if(utils::packageVersion("grDevices") < "3.6.0")
+    color <- grDevices::heat.colors(ord)
+  else
+    color <- grDevices::hcl.colors(ord, palette = "RdYlBu")
+  
+  color <- grDevices::col2rgb(color) / 255
+  color <- apply(color, 2, function(x){do.call(grDevices::rgb,as.list(x))})
+
+  all_colors <- Reduce(function(acu, x){c(acu, rep(x, n_nodes_slice))}, color, NULL)
+
+  nodes <- data.frame(id = nodes_uniq,
+                      label = nodes_uniq,
+                      x = all_pos,
+                      y = as.numeric(levels[2,]) * 100,
+                      #level = node_levels(structure, nodes_uniq)[2,],
+                      color.background = all_colors,
+                      color.border = "#08519c",
+                      borderWidth = 2,
+                      #shape = "star",
+                      shadow = FALSE,
+                      physics = FALSE)
+
+  edges <- data.frame(from = bnlearn::arcs(structure)[,1],
+                      to = bnlearn::arcs(structure)[,2],
+                      arrows = "to",
+                      #color = "orange",
+                      #smooth = TRUE,
+                      shadow = FALSE,
+                      color = "#bdd7e7")
+
+  ret <- visNetwork::visNetwork(nodes, edges) %>%
+    visNetwork::visOptions(highlightNearest = list(enabled = T, hover = T),
+                           nodesIdSelection = T)
+
+  return(ret)
+}
+```
+
+
+
+NY plot
+```{r}
+NY = data[data$state=='NY',]
+NY$date = as.Date(NY$date)
+NY = subset(NY, select = -c(1,2))
+dt0 = fold_dt_rec(NY)
+dt1 = fold_dt_rec1(NY)
+dt_com = cbind(dt0, dt1)
+str_NY_bf10 = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl))
+dyn.dag_NY_bf10 = averaged.network(str_NY_bf10, threshold = 0.85)
+#dyn.dag = tabu(dt_com, blacklist = bl1, whitelist = NULL)
+#class(dyn.dag_NY_bf10) <- c("dbn", class(dyn.dag_NY_bf10))
+#plot_dynamic_network(dyn.dag_NY_bf10)
+```
+
+
+bnviewer NY
+```{r}
+library(bnviewer)
+bayesianNetwork.boot.strength = str_NY_bf10
+
+avg.bayesianNetwork = dyn.dag_NY_bf10
+strength.viewer(
+	dyn.dag_NY_bf10,
+	bayesianNetwork.boot.strength,
+	bayesianNetwork.background = "#eff3ff",
+	bayesianNetwork.arc.strength.threshold.expression = c("@threshold > 0.85 & @threshold <= 1"),
+
+	bayesianNetwork.arc.strength.threshold.expression.color  = c("#08519c"),
+	bayesianNetwork.arc.strength.threshold.alternative.color =  "#08519c",
+	
+	bayesianNetwork.arc.strength.label = TRUE,
+	bayesianNetwork.arc.strength.label.prefix = "",
+	bayesianNetwork.arc.strength.label.color = "#08519c",
+	
+	bayesianNetwork.arc.strength.tooltip = TRUE,
+	
+	bayesianNetwork.edge.scale.min = 1,
+	bayesianNetwork.edge.scale.max = 5,
+	
+	bayesianNetwork.edge.scale.label.min = 14,
+	bayesianNetwork.edge.scale.label.max = 14,
+	
+	bayesianNetwork.width = "100%",
+	bayesianNetwork.height = "800px",
+	bayesianNetwork.layout = "layout_on_grid",
+	node.colors = list(background = "#67a9cf",
+						border = "#1c9099", 
+						highlight = list(background = "#3182bd",
+										border = "#08519c")),
+	node.font = list(color = "black", face="Arial", size=30),
+	node.shape = c("dot"),
+	edges.dashes = FALSE,
+	options.highlightNearest = TRUE,
+	edges.smooth = TRUE,
+	bayesianNetwork.title="NY before Oct",
+)
+```
+
+plot NY strength comparison
+```{r}
+ggplot(str_str_NY_final_t, aes(x=days_ago)) + 
+    geom_line(aes(y = new_cases_t_1, color = "new cases t_1", group=1)) + 
+    geom_line(aes(y = new_deaths_t_1, color = "new deaths t_1", group=1)) + 
+    geom_line(aes(y = covid_like_illness_in_community_t_1, color = "covid like illness in community t_1", group=1)) + 
+    geom_line(aes(y = household_covid_like_illness_t_1, color = "household covid like illness t_1,", group=1)) + 
+    geom_line(aes(y = household_fever_t_1, color = "household fever t_1", group=1)) + 
+    geom_line(aes(y = household_sore_throat_t_1, color = "household sore throat t_1", group=1)) + 
+    geom_line(aes(y = household_cough_t_1, color = "household cough t_1", group=1)) + 
+    geom_line(aes(y = household_shortness_of_breath_t_1, color = "household shortness of breath t_1", group=1)) + 
+    geom_line(aes(y = self_fever_t_1, color = "self fever t_1", group=1)) +
+    geom_line(aes(y = self_anosmia_t_1, color = "self anosmia t_1", group=1)) +
+    geom_line(aes(y = contacted_covid_positive_t_1, color = "contacted covid positive t_1", group=1)) + 
+    ylab('Strength') +
+    xlab('days apart') +
+    ggtitle('NY after Oct') +
+    scale_y_continuous(breaks = 0.05*0:1000)+
+    theme(panel.grid.minor = element_blank())
+```
+
+
+STATIC BN
+```{r}
+ls = matrix(c("new cases", "household fever",
+               "new cases", "household sore throat",
+               "new cases", "household shortness of breath",
+              "new cases", "covid like illness in community",
+              "new cases", "new deaths",
+              "new cases", "household cough",
+              "new cases", "contacted covid positive"),
+         ncol = 2, byrow = TRUE, dimnames = list(NULL, c("from", "to")))
+dag = hc(GA, whitelist = NULL, blacklist = NULL)
+graphviz.plot(dag, shape = "ellipse")
+```
+
+
+```{r}
+library(dplyr)
+NYT_smoothed <- read.csv("NYT_smoothed.csv",header = T)
+GA_geo = NYT_smoothed[NYT_smoothed$state=='GA'|NYT_smoothed$state=='SC'|NYT_smoothed$state=='AL'|NYT_smoothed$state=='FL',]
+GA_geo_cases = subset(GA_geo, select=-c(4))
+FL_sub =GA_geo_cases[GA_geo_cases$state=='FL',]
+FL_sub = subset(FL_sub, select=-c(2))
+names(FL_sub) = c('date','FL')
+GA_sub =GA_geo_cases[GA_geo_cases$state=='GA',]
+GA_sub = subset(GA_sub, select=-c(2))
+names(GA_sub) = c('date','GA')
+AL_sub =GA_geo_cases[GA_geo_cases$state=='AL',]
+AL_sub = subset(AL_sub, select=-c(2))
+names(AL_sub) = c('date','AL')
+SC_sub =GA_geo_cases[GA_geo_cases$state=='SC',]
+SC_sub = subset(SC_sub, select=-c(2))
+names(SC_sub) = c('date','SC')
+joined_GA = merge(FL_sub, GA_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_GA = merge(joined_GA, AL_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_GA = merge(joined_GA, SC_sub, by.x = c("date"), 
+                  by.y = c("date")).
+joined_GA = subset(joined_GA, select=-c(1))
+```
+
+```{r}
+time_renamet0 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_0")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_0"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec <- function(dt){
+    dt <- dt[1:nrow(dt)-1,]
+    
+    dt <- time_renamet0(dt)
+  
+
+  return (dt)
+}
+dt0 = fold_dt_rec(joined_GA)
+
+time_renamet1 <- function(dt){
+  #initial_df_check(dt)
+  if(sum(grepl("*._t_1", names(dt))) > 0)
+    warning("One or more of the column names already ends in '_t_0'. No more suffixes will be added.\n")
+
+  else{
+    # If the data.table is not copied, the original one will be renamed. Can be unexpected behaviour
+    dt <- data.table::copy(dt)
+    sapply(names(dt), grep, pattern = "*._t_1")
+    old <- names(dt)
+    new <- sapply(old,paste0, ... = paste0("_t_1"), simplify=T, USE.NAMES = F)
+    setnames(dt, old, new)
+  }
+
+  return (dt)
+}
+
+fold_dt_rec1 <- function(dt){
+    dt <- dt[-1,]
+    
+    dt <- time_renamet1(dt)
+  
+
+  return (dt)
+}
+dt1 = fold_dt_rec1(joined_GA)
+
+dt_com = cbind(dt0, dt1)
+
+bl1 = tiers2blacklist(list("FL_t_0", "GA_t_0", "AL_t_0","SC_t_0",c("FL_t_1", "GA_t_1", "AL_t_1","SC_t_1")))
+dyn.dag = tabu(dt_com, blacklist = bl1, whitelist = NULL)
+class(dyn.dag) <- c("dbn", class(dyn.dag))
+plot_dynamic_network(dyn.dag)
+```
+
+```{r}
+NY_geo = NYT_smoothed[NYT_smoothed$state=='NY'|NYT_smoothed$state=='VT'|NYT_smoothed$state=='MA'|NYT_smoothed$state=='CT'|NYT_smoothed$state=='NJ'|NYT_smoothed$state=='PA',]
+NY_geo_cases = subset(NY_geo, select=-c(4))
+NY_sub =NY_geo_cases[NY_geo_cases$state=='NY',]
+NY_sub = subset(NY_sub, select=-c(2))
+names(NY_sub) = c('date','NY')
+VT_sub =NY_geo_cases[NY_geo_cases$state=='VT',]
+VT_sub = subset(VT_sub, select=-c(2))
+names(VT_sub) = c('date','VT')
+MA_sub =NY_geo_cases[NY_geo_cases$state=='MA',]
+MA_sub = subset(MA_sub, select=-c(2))
+names(MA_sub) = c('date','MA')
+CT_sub =NY_geo_cases[NY_geo_cases$state=='NJ',]
+CT_sub = subset(CT_sub, select=-c(2))
+names(CT_sub) = c('date','CT')
+NJ_sub =NY_geo_cases[NY_geo_cases$state=='CT',]
+NJ_sub = subset(NJ_sub, select=-c(2))
+names(NJ_sub) = c('date','NJ')
+PA_sub =NY_geo_cases[NY_geo_cases$state=='PA',]
+PA_sub = subset(PA_sub, select=-c(2))
+names(PA_sub) = c('date','PA')
+joined_NY = merge(NY_sub, VT_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_NY  = merge(joined_NY, MA_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_NY  = merge(joined_NY, CT_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_NY  = merge(joined_NY, NJ_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_NY  = merge(joined_NY, PA_sub, by.x = c("date"), 
+                  by.y = c("date"))
+joined_NY = subset(joined_NY, select=-c(1))
+```
+
+```{r}
+dt0 = fold_dt_rec(joined_NY)
+dt1 = fold_dt_rec1(joined_NY)
+dt_com = cbind(dt0, dt1)
+bl1 = tiers2blacklist(list("NY_t_0", "VT_t_0", "MA_t_0","CT_t_0","NJ_t_0","PA_t_0",c("NY_t_1", "VT_t_1", "MA_t_1","CT_t_1","NJ_t_1","PA_t_1")))
+str_NY = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl1))
+dyn.dag = averaged.network(str_NY, threshold = 0.85)
+#dyn.dag = tabu(dt_com, blacklist = bl1, whitelist = NULL)
+class(dyn.dag) <- c("dbn", class(dyn.dag))
+plot_dynamic_network(dyn.dag)
+```
+
+US states geo data
+```{r}
+#all states in US
+library(tidyr)
+library(dplyr)
+library(readr)
+joined_US =  NYT_smoothed[,1:3]
+joined_US =  joined_US%>% pivot_wider(names_from = state, values_from = smoothed_cases)
+joined_US = joined_US %>% drop_na()
+joined_US = subset(joined_US, select=-c(1))
+```
+
+US states geo BN
+```{r}
+#bn learn
+dt0 = fold_dt_rec(joined_US)
+dt1 = fold_dt_rec1(joined_US)
+dt_com = cbind(dt0, dt1)
+names_t0 = names(dt0)
+bl1 = tiers2blacklist(list("WA_t_0",   "IL_t_0",   "CA_t_0",   "AZ_t_0",   "MA_t_0",  
+ "WI_t_0",   "TX_t_0" ,  "NE_t_0",   "UT_t_0",   "OR_t_0",   "FL_t_0" , 
+ "NY_t_0",   "RI_t_0",   "GA_t_0",   "NH_t_0",   "NC_t_0",   "NJ_t_0",  
+"CO_t_0",   "MD_t_0",   "NV_t_0",   "TN_t_0",   "HI_t_0",   "IN_t_0",  "KY_t_0",   "MN_t_0",   "OK_t_0",   "PA_t_0",   "SC_t_0",   "KS_t_0",   "MO_t_0",   "VT_t_0",   "VA_t_0",   "IA_t_0",   "LA_t_0",   "OH_t_0",  "MI_t_0",   "SD_t_0",   "AR_t_0",   "DE_t_0",   "MS_t_0",   "NM_t_0",  
+"ND_t_0" ,  "WY_t_0",   "AK_t_0",   "ME_t_0",   "AL_t_0",   "ID_t_0" , 
+"MT_t_0",   "WV_t_0",   "DC_t_0",   "CT_t_0"  ,c("WA_t_1",   "IL_t_1",   "CA_t_1",   "AZ_t_1",   "MA_t_1",  
+ "WI_t_1",   "TX_t_1" ,  "NE_t_1",   "UT_t_1",   "OR_t_1",   "FL_t_1" , 
+ "NY_t_1",   "RI_t_1",   "GA_t_1",   "NH_t_1",   "NC_t_1",   "NJ_t_1",  
+"CO_t_1",   "MD_t_1",   "NV_t_1",   "TN_t_1",   "HI_t_1",   "IN_t_1",  "KY_t_1",   "MN_t_1",   "OK_t_1",   "PA_t_1",   "SC_t_1",   "KS_t_1",   "MO_t_1",   "VT_t_1",   "VA_t_1",   "IA_t_1",   "LA_t_1",   "OH_t_1",  "MI_t_1",   "SD_t_1",   "AR_t_1",   "DE_t_1",   "MS_t_1",   "NM_t_1",  
+"ND_t_1" ,  "WY_t_1",   "AK_t_1",   "ME_t_1",   "AL_t_1",   "ID_t_1" , 
+"MT_t_1",   "WV_t_1",   "DC_t_1",   "CT_t_1")))
+str_US = boot.strength(dt_com, R = 200, algorithm = "hc",
+             algorithm.args = list(blacklist = bl1))
+dyn.dag = averaged.network(str_US, threshold = 0.85)
+#dyn.dag = tabu(dt_com, blacklist = bl1, whitelist = NULL)
+class(dyn.dag) <- c("dbn", class(dyn.dag))
+plot_dynamic_network(dyn.dag)
+```
+
+save US geo to nodes and edges 
+```{r}
+nodes0 = as.data.frame(names(dt0))
+names(nodes0) = c('nodes')
+nodes1 = as.data.frame(names(dt1))
+names(nodes1) = c('nodes')
+nodes = rbind(nodes0, nodes1)
+nodes$ID <- seq.int(nrow(nodes))
+names(nodes) = c('nodes','ID')
+nodes = nodes[,c(2,1)]
+edges = str_US[str_US$strength>=0.85 & str_US$direction==1, ]
+edges = edges[,1:2]
+names(edges) = c('source','target')
+edges_id = merge(nodes, edges, by.x=c('nodes'), by.y=c('source'))
+edges_id = edges_id[,2:3]
+names(edges_id) = c('source','target')
+edges_id = merge(nodes, edges_id, by.x=c('nodes'), by.y=c('target'))
+edges_id = subset(edges_id, select=c(2,3))
+edges_id = edges_id[,c(2,1)]
+names(edges_id) = c('source','target')
+```
+
+
+```{r}
+str_NY_geom = str_NY[str_NY$strength>=0.85,]
+```
+
+
+```{r}
+library(ggplot2)
+library(clusterSim)
+data1 <- read.csv("combined_final.csv",header = T)
+data2 <- data.Normalization (data1$smoothed_cases,type="n4",normalization="column")
+data3 <- data.Normalization (data1$smoothed_pct_self_sore_throat_weighted,type="n4",normalization="column")
+df = data.frame(data1$date, data2, data3)
+names(df) = c("date","smoothed_cases", "smoothed_pct_self_sore_throat_weighted")
+df= aggregate(.~date, df, sum)
+df$date = as.Date(df$date)
+ggplot(df, aes(x=date)) + 
+  geom_line(aes(y = smoothed_cases, color = "new cases", group=1)) + 
+  geom_line(aes(y = smoothed_pct_self_sore_throat_weighted, color = "self sore throat", group=1))
+```
+
