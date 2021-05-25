@@ -1,7 +1,12 @@
-# Bayesian-network-COVID-19 data
+# Bayesian-network-COVID-19
+
+The biggest challenge in the year of 2020 is COVID-19 pandemic which changed the world and our daily life. We perform a causal and social network analysis on COVID-19 to investigate the social structure and causal relationships between the increase of daily confirmed cases and a few self-reported symptoms. The causal inference of Bayesian networks (BNs) refers to learn the structure of the Directed Acyclic Graph (DAG) from data with nodes representing variables and directed arcs representing causal condition dependency, respectively. The directed relationship in the DAG further indicates the causal effect relationships by computing the probability of conditional dependencies and conducting independence test. Therefore, to give a causal interpretation, the directed arcs can then be described as causeand-effect relationships instead of probabilistic dependencies. A unique BNs method, Dynamic Bayesian Networks (DBNs) is utilized to learn the DAG structure on the COVID-19 multivariate time series data by capturing the dependencies between events change over time. Inspired by the challenge of discovering the causal and social relationship and social between increase of COVID-19 cases and significant symptoms, we deploy DBNs to learn the statistical structure on the multivariate time series COVID-19 dataset. The dataset includes two publicly available sources: (1) self-reported symptoms survey data (Symptoms Data) conducted by Delphi group via Facebook that consists of 50 independent features at state levels, and (2) New York Times daily cumulative number of cases and deaths data (NYTs data).
+
+Data source:
 https://delphi.cmu.edu/about/
 https://delphi.cmu.edu/covidcast/surveys/
 https://delphi.cmu.edu/covidcast/export/
+https://github.com/nytimes/covid-19-data
 
 # CMU Symptom Survey Aggregated CSV Details
 
