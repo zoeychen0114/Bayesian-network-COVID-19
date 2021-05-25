@@ -1,0 +1,16 @@
+import numpy as np 
+import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
+
+#read data
+totalii = pd.read_csv("totalII.csv")
+totalii_pd = totalii.loc[:,'to':'WY']
+totalii_pd = totalii_pd .loc[totalii_pd ['to'] == 'new cases_t_1'] 
+totalii_pd = totalii_pd.loc[:,'AK':'WY']
+totalii_np = totalii_pd.to_numpy()
+matchrate_matrix_ii = np.array([[np.mean(totalii_np[:,i] == totalii_np[:,j]) for j in range(51)] for i in range(51)])
+matchrate_matrix_ii = np.array([[np.count_nonzero((totalii_np[:,i] == totalii_np[:,j])&(totalii_np[:,i] == 1)&(totalii_np[:,j] == 1)) for j in range(51)] for i in range(51)])
+matchrate_matrix_ii_pd = pd.DataFrame(matchrate_matrix_ii, columns = totalii_pd.columns, index=totalii_pd.columns)
+plt.figure(figsize=(20, 20))
+sns.heatmap(matchrate_matrix_ii_pd, cmap="YlGnBu")
