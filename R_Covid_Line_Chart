@@ -1,0 +1,80 @@
+---
+title: "COVID_line_chart"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#read NYT_smoothed
+library(dplyr)
+NYT_smoothed <- read.csv("NYT_smoothed.csv",header = T)
+NYT_line =  NYT_smoothed[,1:3]
+NYT_line =  NYT_line%>% pivot_wider(names_from = state, values_from = smoothed_cases)
+NYT_line = NYT_line %>% drop_na()
+NYT_line = cbind(date_df$date, NYT_line)
+NYT_line$date = as.Date((NYT_line$date))
+```
+
+```{r}
+#ggplot
+library(ggplot2)
+ggplot(NYT_line, aes(x=date)) + 
+  geom_line(aes(y = WA, color = "WA", group = 1)) + 
+  geom_line(aes(y = IL, color = "IL", group = 1)) + 
+  geom_line(aes(y = CA, color = "CA", group = 1)) + 
+  geom_line(aes(y = AZ, color = "AZ", group = 1)) + 
+  geom_line(aes(y = MA, color = "MA", group = 1)) +
+  geom_line(aes(y = WI, color = "WI", group = 1)) + 
+  geom_line(aes(y = TX, color = "TX", group = 1)) + 
+  geom_line(aes(y = NE, color = "NE", group = 1)) + 
+  geom_line(aes(y = UT, color = "UT", group = 1)) + 
+  geom_line(aes(y = OR, color = "OR", group = 1)) + 
+  geom_line(aes(y = FL, color = "FL", group = 1)) + 
+  geom_line(aes(y = NY, color = "NY", group = 1)) + 
+  geom_line(aes(y = RI, color = "RI", group = 1)) + 
+  geom_line(aes(y = GA, color = "GA", group = 1)) + 
+  geom_line(aes(y = NH, color = "NH", group = 1)) + 
+  geom_line(aes(y = NC, color = "NC", group = 1)) + 
+  geom_line(aes(y = NJ, color = "NJ", group = 1)) + 
+  geom_line(aes(y = CO, color = "CO", group = 1)) + 
+  geom_line(aes(y = MD, color = "MD", group = 1)) + 
+  geom_line(aes(y = NV, color = "NV", group = 1)) + 
+  geom_line(aes(y = TN, color = "TN", group = 1)) +
+  geom_line(aes(y = HI, color = "HI", group = 1)) + 
+  geom_line(aes(y = IN, color = "IN", group = 1)) + 
+  geom_line(aes(y = KY, color = "KY", group = 1)) + 
+  geom_line(aes(y = MN, color = "MN", group = 1)) + 
+  geom_line(aes(y = OK, color = "OK", group = 1)) + 
+  geom_line(aes(y = PA, color = "PA", group = 1)) + 
+  geom_line(aes(y = SC, color = "SC", group = 1)) + 
+  geom_line(aes(y = KS, color = "KS", group = 1)) + 
+  geom_line(aes(y = MO, color = "MO", group = 1)) + 
+  geom_line(aes(y = VT, color = "VT", group = 1)) + 
+  geom_line(aes(y = VA, color = "VA", group = 1)) + 
+  geom_line(aes(y = IA, color = "IA", group = 1)) + 
+  geom_line(aes(y = LA, color = "LA", group = 1)) + 
+  geom_line(aes(y = OH, color = "OH", group = 1)) + 
+  geom_line(aes(y = MI, color = "MI", group = 1)) + 
+  geom_line(aes(y = SD, color = "SD", group = 1)) + 
+  geom_line(aes(y = AR, color = "AR", group = 1)) + 
+  geom_line(aes(y = DE, color = "DE", group = 1)) + 
+  geom_line(aes(y = MS, color = "MS", group = 1)) + 
+  geom_line(aes(y = NM, color = "NM", group = 1)) + 
+  geom_line(aes(y = ND, color = "ND", group = 1)) + 
+  geom_line(aes(y = WY, color = "WY", group = 1)) + 
+  geom_line(aes(y = AK, color = "AK", group = 1)) + 
+  geom_line(aes(y = ME, color = "ME", group = 1)) + 
+  geom_line(aes(y = AL, color = "AL", group = 1)) + 
+  geom_line(aes(y = ID, color = "ID", group = 1)) + 
+  geom_line(aes(y = MT, color = "MT", group = 1)) + 
+  geom_line(aes(y = WV, color = "WV", group = 1)) + 
+  geom_line(aes(y = DC, color = "DC", group = 1)) + 
+  geom_line(aes(y = CT, color = "CT", group = 1))
+```
+
+
+
+
