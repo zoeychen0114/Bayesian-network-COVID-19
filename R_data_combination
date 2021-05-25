@@ -1,0 +1,68 @@
+library(dplyr)
+library(data.table)
+#read data
+NYT_smoothed <- read.csv("NYT_smoothed.csv",header = T)
+cmu_state = fread("overall-state-smoothed010621.csv.gz")
+
+#only overall is considered
+cmu = cmu_state[cmu_state$gender=='overall',]
+cmu = cmu[cmu$age_bucket=='overall',]
+
+#merge cmu and NYT
+NYT_smoothed$date = as.Date(NYT_smoothed$date)
+cmu$state_code = toupper(cmu$state_code)
+cmu = aggregate(.~date+state_code, cmu, sum)
+joined_df = merge(NYT_smoothed, cmu, by.x = c("date","state"), 
+                  by.y = c("date", "state_code"))
+
+#read tracking data
+#tracking_smoothed <- read.csv("tracking_smoothed.csv",header = T)
+#combined_df = merge(joined_df, tracking_smoothed, by.x = c("date","state"), 
+#                    by.y = c("date", "state"))
+
+#formatting
+for_corr = subset(joined_df, select=-c(5,6,7))
+for_corr = subset(for_corr, select=-c(5:54))
+for_corr = subset(for_corr, select=-c(1,2))
+for_corr = subset(for_corr, select=-c(3,4,5))
+for_corr <- sapply( for_corr, as.numeric )
+
+cor_joined <- cor(for_corr)
+round(cor_joined, 2)
+library(Hmisc)
+cor_joined <- rcorr(as.matrix(for_corr))
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+#correlation matrix
+flattenCorrMatrix(cor_joined$r, cor_joined$P)
+
+#compute zero and null percentage
+cmu_nonweighted = subset(cmu, select=-c(56:105))
+null_table = cmu_nonweighted%>%summarise_all(list(name = ~sum(is.na(.))/length(.)))
+null_removed = null_table[,null_table>0.3]
+
+#select 14 features with high correlations
+CMU_14feat =joined_df  %>% select(date, state
+,smoothed_cases
+,smoothed_deaths
+,smoothed_pct_hh_cli_weighted                
+,smoothed_pct_cmnty_cli_weighted             
+,smoothed_pct_hh_fever_weighted              
+,smoothed_pct_hh_sore_throat_weighted        
+,smoothed_pct_hh_cough_weighted              
+,smoothed_pct_hh_shortness_of_breath_weighted
+,smoothed_pct_self_fever_weighted            
+,smoothed_pct_self_sore_throat_weighted      
+,smoothed_pct_self_anosmia_ageusia_weighted  
+,smoothed_pct_contact_covid_positive_weighted
+)
+
+write.csv(CMU_12feat, row.names = FALSE)
+
